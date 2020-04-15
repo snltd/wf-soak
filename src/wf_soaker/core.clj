@@ -2,7 +2,8 @@
   (:require [clj-http.client :as client]
             [environ.core :refer [env]]
             [clojure.set :as set]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:gen-class))
 
 ;; There's some difficulty in this problem in that Wavefront has a resolution
 ;; of one second. So, sending a thousand points per second from a single host
@@ -115,7 +116,7 @@
     (for [[k v] var-list]
       [k
        (if (number? (k defaults))
-         (Integer/parseInt (str v))
+         (Float/parseFloat (str v))
          v)])))
 
 (defn setup-vars [var-list]

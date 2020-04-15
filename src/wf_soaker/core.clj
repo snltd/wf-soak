@@ -51,9 +51,16 @@
   (if (debug-on)
     (println (apply str chunks))))
 
+(defn die [& chunks]
+  "print an error and exit"
+  (println (str "FATAL ERROR: " (apply str chunks)))
+  (System/exit 1))
+
 (defn send-data! [data endpoint]
   "POST a chunk of data to a Wavefront endpoint"
-  (client/post endpoint {:body data}))
+  (try
+    (client/post endpoint {:body data})
+  (catch Exception e (die (.getMessage e)))))
 
 (defn point-value []
   (rand-int 100))
@@ -150,8 +157,7 @@
         t-0 (now)]
     (let [unset-vars (any-unset-vars vars)]
       (when unset-vars
-        (println (str "ERROR: " unset-vars " is not set."))
-        (comment System/exit 1))
+        (die unset-vars " is not set."))
       (print-opening-banner! (fix-var-types vars))
       (run-loop! (fix-var-types vars))
       (print-closing-banner! t-0)

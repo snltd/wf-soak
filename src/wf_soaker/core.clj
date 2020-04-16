@@ -49,15 +49,17 @@
 
 (defn debug [& chunks]
   (if (debug-on)
-    (println (apply str chunks))))
+    (println (str/join chunks))))
 
-(defn die [& chunks]
+(defn die
   "print an error and exit"
-  (println (str "FATAL ERROR: " (apply str chunks)))
+  [& chunks]
+  (println (str "FATAL ERROR: " (str/join chunks)))
   (System/exit 1))
 
-(defn send-data! [data endpoint]
+(defn send-data!
   "POST a chunk of data to a Wavefront endpoint"
+  [data endpoint]
   (try
     (client/post endpoint {:body data})
   (catch Exception e (die (.getMessage e)))))
@@ -74,17 +76,19 @@
 (defn source-tag [source-num]
   (str "source=soaker-" source-num))
 
-(defn point-bundle [wf-path thread-num metric-range tag-range]
+(defn point-bundle
   "makes a vector of metric-range × tag-range points"
+  [wf-path thread-num metric-range tag-range]
   (for [metric-num metric-range tag-num tag-range]
     (str/join
       " "
       [(metric-name wf-path metric-num) (point-value) (now)
        (source-tag thread-num) (point-tag tag-num)])))
 
-(defn thread-writer [thread-num {:keys [wf-parallel-metrics wf-parallel-tags
-                                         wf-interval wf-proxy wf-path]}]
+(defn thread-writer
   "after some random sub-second interval, sends a point bundle to Wavefront"
+  [thread-num {:keys [wf-parallel-metrics wf-parallel-tags wf-interval
+                      wf-proxy wf-path]}]
   (let [sleep-time (rand-int (* 1000 wf-interval))
         bundle (point-bundle wf-path thread-num (range wf-parallel-metrics)
                              (range wf-parallel-tags))]
@@ -94,71 +98,68 @@
     (send-data! (str/join "\n" bundle) wf-proxy)
     (swap! points-sent (partial + (count bundle)))))
 
-(defn run-thread [{:keys [wf-threads wf-parallel-metrics wf-parallel-tags]
-                   :as vars}]
+(defn run-thread
   "Run as many parallel write operations as are requested"
+  [{:keys [wf-threads wf-parallel-metrics wf-parallel-tags] :as vars}]
   (doseq [thread-num (range wf-threads)]
     (debug (format "  thread %02d: firing" thread-num))
     (future (thread-writer thread-num vars))))
 
-(defn run-loop! [{:keys [wf-threads wf-parallel-metrics
-                                 wf-iterations wf-parallel-tags
-                                 wf-interval] :as vars}]
+(defn run-loop!
+  [{:keys [wf-iterations wf-interval] :as vars}]
   (loop [iteration 0]
-    (if (= wf-iterations iteration)
-      (shutdown-agents)
-      (do
-        (debug (format "iteration %d of %d" (inc iteration) wf-iterations))
-        (run-thread vars)
-        (Thread/sleep (* wf-interval 1000))
-        (recur (inc iteration))))))
+    (when (< iteration wf-iterations)
+      (debug (format "iteration %d of %d" (inc iteration) wf-iterations))
+      (run-thread vars)
+      (Thread/sleep (* wf-interval 1000))
+      (recur (inc iteration))))
+  (shutdown-agents))
 
-(defn default-type [k]
-  (type (k defaults)))
+(defn coerced-value
+  "Crudely coerce things which should be numbers. We only deal in ints."
+  [existing-value new-value]
+  (if (number? existing-value) (Integer/parseInt (str new-value)) new-value))
 
-(defn fix-var-types [var-list]
-  "Coerce env vars (strings) to numbers"
+(defn fix-var-types
+  "Coerce env vars (strings) to numbers, when they need to be. Looks at the
+  existing value in defaults and copies that."
+  [var-list]
   (into {}
-    (for [[k v] var-list]
-      [k
-       (if (number? (k defaults))
-         (Integer/parseInt (str v))
-         v)])))
+    (for [[k v] var-list] [k (coerced-value (k defaults) v)])))
 
-(defn setup-vars [var-list]
+(defn setup-vars
   "Override default settings with any assigned in environment variables"
+  [var-list]
   (merge var-list (select-keys env (keys var-list)) ))
 
-(defn any-unset-vars [var-list]
+(defn any-unset-vars
   "Returns the first unset var it finds in var-list"
+  [var-list]
   (get (set/map-invert var-list) nil))
 
-(defn point-rate [{:keys [wf-threads wf-parallel-metrics
-                                     wf-iterations wf-parallel-tags
-                                     wf-interval]}]
+(defn point-rate
   "calculate and return the point rate the given params will create"
+  [{:keys [wf-threads wf-parallel-tags wf-parallel-metrics wf-interval]}]
   (quot (* wf-threads wf-parallel-tags wf-parallel-metrics) wf-interval))
 
-(defn print-opening-banner! [{:keys [wf-proxy wf-iterations wf-interval]
-                              :as vars}]
+(defn print-opening-banner!
+  [{:keys [wf-proxy wf-iterations wf-interval] :as vars}]
   (println (format "Requested pps: %d" (point-rate vars)))
   (println (format "Duration:      %ds (%d iterations at %ds intervals)"
                    (* wf-iterations wf-interval) wf-iterations wf-interval))
   (println (str    "Endpoint:      " wf-proxy)))
 
-(defn print-closing-banner! [t-0]
-  (let [elapsed-time (- (now) t-0)]
-    (println (format "Elapsed time:  %ds" elapsed-time))
-    (println (format "Sent points:   %d" @points-sent))
-    (println (format "Actual pps:    %d" (quot @points-sent elapsed-time)))))
+(defn print-closing-banner!
+  [elapsed-time]
+  (println (format "Elapsed time:  %ds" elapsed-time))
+  (println (format "Sent points:   %d" @points-sent))
+  (println (format "Actual pps:    %d" (quot @points-sent elapsed-time))))
 
 (defn -main []
   (let [vars (setup-vars defaults)
-        t-0 (now)]
-    (let [unset-vars (any-unset-vars vars)]
-      (when unset-vars
-        (die unset-vars " is not set."))
-      (print-opening-banner! (fix-var-types vars))
-      (run-loop! (fix-var-types vars))
-      (print-closing-banner! t-0)
-      )))
+        start-time (now)]
+    (when-let [unset-vars (any-unset-vars vars)]
+      (die unset-vars " is not set."))
+    (print-opening-banner! (fix-var-types vars))
+    (run-loop! (fix-var-types vars))
+    (print-closing-banner! (- (now) start-time))))

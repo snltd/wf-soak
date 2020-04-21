@@ -1,4 +1,4 @@
-(defproject wf-soaker "1.2.1"
+(defproject wf-soaker "1.3.0"
   :description "Send a steady point rate to Wavefront"
   :url "https://github.com/snltd/wf-soak"
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"

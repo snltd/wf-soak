@@ -17,8 +17,8 @@
 ;; be run inside a container in ECS.  Use the following: (all numbers must be
 ;; integers.)
 ;;
-;; WF_PROXY            where the proxy is. Requires the protocol and port
-;;                     number: http://wavefront.localnet:2878. No default.
+;; WF_PROXY            DNS name of the proxy (or the LB in front). No protocol
+;;                     or port number required. [no default]
 ;; WF_PATH             the base metric path [default dev.soak]
 ;; WF_INTERVAL         send a bundle of metrics every this-many seconds [1]
 ;; WF_PARALLEL_METRICS each interval send a bundle of this-many metrics [10]
@@ -40,7 +40,7 @@
     :wf-parallel-metrics 10
     :wf-parallel-tags 10
     :wf-threads 5
-    :wf-iterations 120 })
+    :wf-iterations 1200 })
 
 (defn now [] (quot (System/currentTimeMillis) 1000))
 
@@ -61,7 +61,7 @@
   "POST a chunk of data to a Wavefront endpoint"
   [data endpoint]
   (try
-    (client/post endpoint {:body data})
+    (client/post (str "http://" endpoint ":2878") {:body data})
   (catch Exception e (die (.getMessage e)))))
 
 (defn point-value []

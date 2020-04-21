@@ -80,8 +80,8 @@
   "makes a vector of metric-range × tag-range points"
   [wf-path thread-num metric-range tag-range]
   (for [metric-num metric-range tag-num tag-range]
-    (str/join [(metric-name wf-path metric-num) (point-value) (now)
-               (source-tag thread-num) (point-tag tag-num)])))
+    (str/join " " [(metric-name wf-path metric-num) (point-value) (now)
+                   (source-tag thread-num) (point-tag tag-num)])))
 
 (defn thread-writer
   "after some random sub-second interval, sends a point bundle to Wavefront"

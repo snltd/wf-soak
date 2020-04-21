@@ -16,7 +16,7 @@ $ docker build -t wf-soaker .
 ## Run
 
 ```
-$ docker run -it -e WF_PROXY="http://wavefront.localnet:2878" wf-soaker
+$ docker run -it -e WF_PROXY="wavefront.localnet" wf-soaker
 ```
 
 ## Settings
